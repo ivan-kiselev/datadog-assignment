@@ -14,7 +14,7 @@ pub struct Request {
 // #[derive(Clone, Default, Debug)]
 pub struct LogEntry {
     pub ip_address: IpAddr,
-    pub user_agent: String,
+    pub identifier: String,
     pub user_id: String,
     pub timestamp: DateTime<FixedOffset>,
     pub request: Request,
@@ -41,7 +41,7 @@ impl Display for LogEntry {
             response_code: {}\n
             size: {}\n",
             self.ip_address,
-            self.user_agent,
+            self.identifier,
             self.user_id,
             self.timestamp,
             self.request,
@@ -50,22 +50,36 @@ impl Display for LogEntry {
         )
     }
 }
-pub(self) mod parsers {
-    use nom::{error::ErrorKind, Err, IResult};
-    use std::net::{AddrParseError, IpAddr};
 
-    fn not_whitespace(i: &str) -> nom::IResult<&str, &str> {
+#[allow(dead_code)]
+pub(self) mod parsers {
+    use nom::{error::ErrorKind, Err};
+    use std::net::IpAddr;
+
+    fn is_not_whitespace(i: &str) -> nom::IResult<&str, &str> {
         nom::bytes::complete::is_not(" \t")(i)
     }
 
+    fn is_whitespace(i: &str) -> nom::IResult<&str, &str> {
+        nom::bytes::complete::is_a(" \t")(i)
+    }
+
     fn parse_ip_address(i: &str) -> nom::IResult<&str, IpAddr> {
-        nom::combinator::map_parser(not_whitespace, ip_parser)(i)
+        nom::combinator::map_parser(is_not_whitespace, ip_parser)(i)
+    }
+
+    //TODO: Implement RFC1413 instead of just -
+    fn parse_identifier(i: &str) -> nom::IResult<&str, String> {
+        match nom::character::complete::char('-')(i) {
+            Ok((rest, user_id)) => Ok((rest, String::from(user_id))),
+            Err(err) => Err(err),
+        }
     }
 
     fn ip_parser(i: &str) -> nom::IResult<&str, IpAddr> {
         match i.parse::<IpAddr>() {
-            Ok(addr) => IResult::Ok(("", addr)),
-            Err(_) => IResult::Err(Err::Error(nom::error::Error {
+            Ok(addr) => Ok(("", addr)),
+            Err(_) => Err(Err::Error(nom::error::Error {
                 input: i,
                 code: ErrorKind::Verify,
             })),
@@ -87,8 +101,8 @@ pub(self) mod parsers {
                 Ok((" -", IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1))))
             );
             assert_eq!(
-                parse_ip_address("127.0.0.1 - mary [09/May/2018:16:00:42 +0000] \"POST /api/user HTTP/1.0\" 503 12"),
-                Ok((" - mary [09/May/2018:16:00:42 +0000] \"POST /api/user HTTP/1.0\" 503 12", IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1))))
+                parse_ip_address("192.168.0.1 - mary [09/May/2018:16:00:42 +0000] \"POST /api/user HTTP/1.0\" 503 12"),
+                Ok((" - mary [09/May/2018:16:00:42 +0000] \"POST /api/user HTTP/1.0\" 503 12", IpAddr::V4(Ipv4Addr::new(192, 168, 0, 1))))
             );
             assert_eq!(
                 parse_ip_address("-"),
@@ -101,19 +115,43 @@ pub(self) mod parsers {
         #[test]
         fn not_whitespace_test() {
             assert_eq!(
-                not_whitespace("before_whitespace after_whitespace"),
+                is_not_whitespace("before_whitespace after_whitespace"),
                 Ok((" after_whitespace", "before_whitespace"))
             );
             assert_eq!(
-                not_whitespace("before_tab\tafter_tab"),
+                is_not_whitespace("before_tab\tafter_tab"),
                 Ok(("\tafter_tab", "before_tab"))
             );
             assert_eq!(
-                not_whitespace(" after_space"),
+                is_not_whitespace(" after_space"),
                 Err(nom::Err::Error(nom::error::Error::new(
                     " after_space",
                     nom::error::ErrorKind::IsNot
                 )))
+            );
+        }
+        #[test]
+        fn identifier_parser_test() {
+            assert_eq!(
+                parse_identifier(
+                    "- mary [09/May/2018:16:00:42 +0000] \"POST /api/user HTTP/1.0\" 503 12"
+                ),
+                Ok((
+                    " mary [09/May/2018:16:00:42 +0000] \"POST /api/user HTTP/1.0\" 503 12",
+                    String::from("-")
+                ))
+            );
+        }
+        #[test]
+        fn is_not_whitespace_test() {
+            assert_eq!(
+                is_not_whitespace(
+                    "mary [09/May/2018:16:00:42 +0000] \"POST /api/user HTTP/1.0\" 503 12"
+                ),
+                Ok((
+                    " [09/May/2018:16:00:42 +0000] \"POST /api/user HTTP/1.0\" 503 12",
+                    "mary"
+                ))
             );
         }
     }
