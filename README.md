@@ -1,6 +1,6 @@
 <h3>Things to improve</h3>
 
-- [user-identifier](https://tools.ietf.org/html/rfc1413) is not really parsed as it is not usually used
+- [user-identifier](https://tools.ietf.org/html/rfc1413) is not really parsed as it is not usually used, it is assumed that it always has a value of "-". I'm not sure if it is really used in web-applications, but this parser will skip entries with non-empty identifier so far, assuming they are mailformed. TODO is to actually accept entries with full identifier according to RFC
 
 - Error handling:
 
