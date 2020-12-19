@@ -4,8 +4,9 @@ use std::fmt;
 use std::fmt::Display;
 use std::net::IpAddr;
 
+#[derive(Debug, PartialEq)]
 pub struct Request {
-    pub method: u16,
+    pub method: String,
     pub path: String,
     pub protocol: String,
 }
@@ -55,7 +56,6 @@ impl Display for LogEntry {
 #[allow(dead_code)]
 pub(self) mod parsers {
     use super::*;
-    use nom::{error::ErrorKind, Err};
     use std::net::Ipv4Addr;
 
     fn is_not_whitespace(i: &str) -> nom::IResult<&str, &str> {
@@ -108,6 +108,47 @@ pub(self) mod parsers {
             parse_timestamp_helper_dash,
         ))(i)
     }
+
+    fn parse_request(i: &str) -> nom::IResult<&str, Request> {
+        fn parse_request_helper_dash(i: &str) -> nom::IResult<&str, Request> {
+            match nom::bytes::complete::tag("-")(i) {
+                Ok((rest, _)) => Ok((
+                    rest,
+                    Request {
+                        method: String::from("-"),
+                        path: String::from("-"),
+                        protocol: String::from("-"),
+                    },
+                )),
+                Err(err) => Err(err),
+            }
+        }
+        fn parse_request_helper(i: &str) -> nom::IResult<&str, Request> {
+            match nom::sequence::delimited(
+                nom::character::complete::char('"'),
+                nom::sequence::tuple((
+                    is_not_whitespace,
+                    is_whitespace,
+                    is_not_whitespace,
+                    is_whitespace,
+                    nom::bytes::complete::take_until("\""),
+                )),
+                nom::character::complete::char('"'),
+            )(i)
+            {
+                Ok((rest, (result1, _, result2, _, result3))) => Ok((
+                    rest,
+                    Request {
+                        method: String::from(result1),
+                        path: String::from(result2),
+                        protocol: String::from(result3),
+                    },
+                )),
+                Err(err) => Err(err),
+            }
+        }
+        nom::branch::alt((parse_request_helper_dash, parse_request_helper))(i)
+    }
     //TODO: Implement RFC1413 instead of just -
     fn parse_identifier(i: &str) -> nom::IResult<&str, String> {
         match nom::character::complete::char('-')(i) {
@@ -137,24 +178,6 @@ pub(self) mod parsers {
             assert_eq!(
                 parse_ip_address("-"),
                 Ok(("", IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0))))
-            );
-        }
-        #[test]
-        fn not_whitespace_test() {
-            assert_eq!(
-                is_not_whitespace("before_whitespace after_whitespace"),
-                Ok((" after_whitespace", "before_whitespace"))
-            );
-            assert_eq!(
-                is_not_whitespace("before_tab\tafter_tab"),
-                Ok(("\tafter_tab", "before_tab"))
-            );
-            assert_eq!(
-                is_not_whitespace(" after_space"),
-                Err(nom::Err::Error(nom::error::Error::new(
-                    " after_space",
-                    nom::error::ErrorKind::IsNot
-                )))
             );
         }
         #[test]
@@ -205,6 +228,31 @@ pub(self) mod parsers {
                 Ok((
                     " \"POST /api/user HTTP/1.0\" 503 12",
                     DateTime::parse_from_rfc3339("1970-01-01T00:00:00-00:00").unwrap()
+                ))
+            );
+        }
+        #[test]
+        fn parse_request_test() {
+            assert_eq!(
+                parse_request("\"POST /api/user HTTP/1.0\" 503 12"),
+                Ok((
+                    " 503 12",
+                    Request {
+                        method: String::from("POST"),
+                        path: String::from("/api/user"),
+                        protocol: String::from("HTTP/1.0")
+                    }
+                ))
+            );
+            assert_eq!(
+                parse_request("- 503 12"),
+                Ok((
+                    " 503 12",
+                    Request {
+                        method: String::from("-"),
+                        path: String::from("-"),
+                        protocol: String::from("-")
+                    }
                 ))
             );
         }
