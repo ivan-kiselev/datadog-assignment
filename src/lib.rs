@@ -186,6 +186,15 @@ pub(self) mod parsers {
                     "mary"
                 ))
             );
+            assert_eq!(
+                is_not_whitespace(
+                    "- [09/May/2018:16:00:42 +0000] \"POST /api/user HTTP/1.0\" 503 12"
+                ),
+                Ok((
+                    " [09/May/2018:16:00:42 +0000] \"POST /api/user HTTP/1.0\" 503 12",
+                    "-"
+                ))
+            );
         }
         #[test]
         fn parse_timestamp_test() {
