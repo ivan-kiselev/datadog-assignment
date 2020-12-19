@@ -7,6 +7,7 @@ use std::net::IpAddr;
 pub struct Request {
     pub method: u16,
     pub path: String,
+    pub protocol: String,
 }
 
 // Example of the time log:
@@ -53,6 +54,7 @@ impl Display for LogEntry {
 
 #[allow(dead_code)]
 pub(self) mod parsers {
+    use super::*;
     use nom::{error::ErrorKind, Err};
     use std::net::IpAddr;
 
@@ -65,24 +67,55 @@ pub(self) mod parsers {
     }
 
     fn parse_ip_address(i: &str) -> nom::IResult<&str, IpAddr> {
-        nom::combinator::map_parser(is_not_whitespace, ip_parser)(i)
+        fn ip_parser_helper(i: &str) -> nom::IResult<&str, IpAddr> {
+            match i.parse::<IpAddr>() {
+                Ok(addr) => Ok(("", addr)),
+                Err(_) => Err(Err::Error(nom::error::Error {
+                    input: i,
+                    code: ErrorKind::Verify,
+                })),
+            }
+        }
+
+        nom::combinator::map_parser(is_not_whitespace, ip_parser_helper)(i)
     }
 
+    fn parse_timestamp(i: &str) -> nom::IResult<&str, DateTime<FixedOffset>> {
+        fn parse_timestamp_helper(i: &str) -> nom::IResult<&str, DateTime<FixedOffset>> {
+            match DateTime::parse_from_str(i, "%d/%b/%Y:%H:%M:%S %z") {
+                Ok(date) => Ok(("", date)),
+                Err(_) => Ok((
+                    "]",
+                    DateTime::parse_from_rfc3339("1970-01-01T00:00:00-00:00").unwrap(),
+                )),
+            }
+        }
+        fn parse_timestamp_helper_dash(i: &str) -> nom::IResult<&str, DateTime<FixedOffset>> {
+            match nom::bytes::complete::tag("-")(i) {
+                Ok((rest, _)) => Ok((
+                    rest,
+                    DateTime::parse_from_rfc3339("1970-01-01T00:00:00-00:00").unwrap(),
+                )),
+                Err(err) => Err(err),
+            }
+        }
+        nom::branch::alt((
+            nom::sequence::delimited(
+                nom::character::complete::char('['),
+                nom::combinator::map_parser(
+                    nom::bytes::complete::take_until("]"),
+                    parse_timestamp_helper,
+                ),
+                nom::character::complete::char(']'),
+            ),
+            parse_timestamp_helper_dash,
+        ))(i)
+    }
     //TODO: Implement RFC1413 instead of just -
     fn parse_identifier(i: &str) -> nom::IResult<&str, String> {
         match nom::character::complete::char('-')(i) {
             Ok((rest, user_id)) => Ok((rest, String::from(user_id))),
             Err(err) => Err(err),
-        }
-    }
-
-    fn ip_parser(i: &str) -> nom::IResult<&str, IpAddr> {
-        match i.parse::<IpAddr>() {
-            Ok(addr) => Ok(("", addr)),
-            Err(_) => Err(Err::Error(nom::error::Error {
-                input: i,
-                code: ErrorKind::Verify,
-            })),
         }
     }
 
@@ -151,6 +184,24 @@ pub(self) mod parsers {
                 Ok((
                     " [09/May/2018:16:00:42 +0000] \"POST /api/user HTTP/1.0\" 503 12",
                     "mary"
+                ))
+            );
+        }
+        #[test]
+        fn parse_timestamp_test() {
+            assert_eq!(
+                parse_timestamp("[09/May/2018:16:00:42 +0000] \"POST /api/user HTTP/1.0\" 503 12"),
+                Ok((
+                    " \"POST /api/user HTTP/1.0\" 503 12",
+                    DateTime::parse_from_str("09/May/2018:16:00:42 +0000", "%d/%b/%Y:%H:%M:%S %z")
+                        .unwrap()
+                ))
+            );
+            assert_eq!(
+                parse_timestamp("- \"POST /api/user HTTP/1.0\" 503 12"),
+                Ok((
+                    " \"POST /api/user HTTP/1.0\" 503 12",
+                    DateTime::parse_from_rfc3339("1970-01-01T00:00:00-00:00").unwrap()
                 ))
             );
         }
