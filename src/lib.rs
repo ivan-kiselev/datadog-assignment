@@ -56,7 +56,7 @@ impl Display for LogEntry {
 pub(self) mod parsers {
     use super::*;
     use nom::{error::ErrorKind, Err};
-    use std::net::IpAddr;
+    use std::net::Ipv4Addr;
 
     fn is_not_whitespace(i: &str) -> nom::IResult<&str, &str> {
         nom::bytes::complete::is_not(" \t")(i)
@@ -70,10 +70,7 @@ pub(self) mod parsers {
         fn ip_parser_helper(i: &str) -> nom::IResult<&str, IpAddr> {
             match i.parse::<IpAddr>() {
                 Ok(addr) => Ok(("", addr)),
-                Err(_) => Err(Err::Error(nom::error::Error {
-                    input: i,
-                    code: ErrorKind::Verify,
-                })),
+                Err(_) => Ok(("", IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)))),
             }
         }
 
@@ -139,10 +136,7 @@ pub(self) mod parsers {
             );
             assert_eq!(
                 parse_ip_address("-"),
-                Err(Err::Error(nom::error::Error {
-                    input: "-",
-                    code: ErrorKind::Verify,
-                }))
+                Ok(("", IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0))))
             );
         }
         #[test]
