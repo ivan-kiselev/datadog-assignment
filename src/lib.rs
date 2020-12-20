@@ -35,23 +35,15 @@ pub fn read_logs(channel: Sender<i64>, refresh_interval: Duration, filename: &st
     // Initial file read on the start
     let lines = std::io::BufReader::new(&file).lines();
     for line in lines {
-        match line {
-            Ok(unparsed_log) => {
-                match parsers::parse_log_entry(&unparsed_log[..]) {
-                    Ok(log) => {
-                        // Generate set of Unix timestamps according to refresh window
-                        if acceptible_timestamps(refresh_interval)
-                            .contains(&log.timestamp.timestamp())
-                        {
-                            // Check if log entry's timestamp is within previously generated timestamps HashMap
-                            let count = stats.entry(log.timestamp.timestamp()).or_insert(0);
-                            *count += 1;
-                        }
-                    }
-                    Err(err) => println!("Error: {}", err),
+        if let Ok(unparsed_log) = line {
+            if let Ok(log) = parsers::parse_log_entry(&unparsed_log[..]) {
+                // Generate set of Unix timestamps according to refresh window
+                if acceptible_timestamps(refresh_interval).contains(&log.timestamp.timestamp()) {
+                    // Check if log entry's timestamp is within previously generated timestamps HashMap
+                    let count = stats.entry(log.timestamp.timestamp()).or_insert(0);
+                    *count += 1;
                 }
             }
-            Err(err) => println!("Error: {}", err),
         }
     }
 
