@@ -10,7 +10,7 @@ mod parser_combinators;
 pub use crate::parser_combinators::parsers;
 
 // Return range of unix timestamps indicatding now() substracted by refresh interval
-// We +1 in the end because Rust ranges are not inclusive..
+// We +1 in the end because Rust ranges are not inclusive on the right side..
 // ..so as we calculate timestamp every iteration - it's often going to be..
 // ..the same as timestamp of the log entry, e.g. log won't be included in the range
 fn acceptible_timestamps(refresh_interval: Duration) -> std::ops::Range<i64> {
@@ -29,6 +29,7 @@ fn count_logs_in_interval(stats: &HashMap<i64, i64>) -> i64 {
 pub fn read_logs(channel: Sender<i64>, refresh_interval: Duration, filename: &str) {
     let file = std::fs::File::open(filename).unwrap();
     let mut log_watcher = LogWatcher::register(filename.to_string()).unwrap();
+    // timestamp => count HashMap
     let mut stats: HashMap<i64, i64> = HashMap::new();
 
     // Initial file read on the start
