@@ -5,8 +5,10 @@ extern crate logwatcher;
 use logwatcher::{LogWatcher, LogWatcherAction};
 use std::collections::HashMap;
 
+// Load ./parser_combinators.rs
 mod parser_combinators;
 pub use crate::parser_combinators::parsers;
+
 // Return range of unix timestamps indicatding now() substracted by refresh interval
 // We +1 in the end because Rust ranges are not inclusive..
 // ..so as we calculate timestamp every iteration - it's often going to be..
@@ -40,7 +42,7 @@ pub fn read_logs(channel: Sender<i64>, refresh_interval: Duration, filename: &st
                         if acceptible_timestamps(refresh_interval)
                             .contains(&log.timestamp.timestamp())
                         {
-                            // Check if log entry's timestamp is within previously generated timestamps
+                            // Check if log entry's timestamp is within previously generated timestamps HashMap
                             let count = stats.entry(log.timestamp.timestamp()).or_insert(0);
                             *count += 1;
                         }
@@ -65,11 +67,6 @@ pub fn read_logs(channel: Sender<i64>, refresh_interval: Duration, filename: &st
                     let count = stats.entry(log.timestamp.timestamp()).or_insert(0);
                     *count += 1;
                 }
-                println!(
-                    "Timestamp: {}, acceptible timestamps: {:?}",
-                    &log.timestamp.timestamp(),
-                    timestamps.end
-                );
                 stats.retain(|key, _| timestamps.contains(key));
                 channel.send(count_logs_in_interval(&stats)).unwrap();
             }
