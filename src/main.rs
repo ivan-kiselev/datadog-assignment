@@ -13,15 +13,10 @@ fn main() {
     loop {
         let start = Utc::now().timestamp() as u64;
         let message = rx_stats.recv();
-        println!(
-            "Logs Rate: {}/s",
-            match message {
-                Ok(c) => {
-                    format!("{}", c as f64 / 10.0)
-                }
-                Err(err) => format!("{}", err),
-            }
-        );
+        match message {
+            Ok(messages_count) => println!("Rate: {}/s", messages_count as f64 / 10.0),
+            Err(err) => println!("Error: {}", err),
+        }
         let end = Utc::now().timestamp() as u64;
         thread::sleep(std::time::Duration::from_secs(10 - (end - start)));
     }
