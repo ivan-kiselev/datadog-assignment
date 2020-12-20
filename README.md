@@ -2,7 +2,7 @@
 
 - [user-identifier](https://tools.ietf.org/html/rfc1413) is not really parsed as it is not usually used, it is assumed that it always has a value of "-". I'm not sure if it is really used in web-applications, but this parser will skip entries with non-empty identifier so far, assuming they are mailformed. TODO is to actually accept entries with full identifier according to RFC
 
-- Error handling:
+- Error handling in Parser:
 
   - Right now it's not that obvious which part of a string is messed up, errors are propogated from nom library
   - A lot of errors are resulting in wrapped types (Err(Err(Err(...)))). Monads ftw, but amount of time I have for the assignemnt is not playing in my favour in combination to my knowledge about Monads, so I'll leave it for now.
