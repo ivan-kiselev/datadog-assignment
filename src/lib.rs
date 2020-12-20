@@ -26,7 +26,7 @@ fn count_logs_in_interval(stats: &HashMap<i64, i64>) -> i64 {
     count
 }
 
-pub fn read_logs(stats_channel: Sender<i64>, refresh_interval: Duration, filename: &str) {
+pub fn read_logs(tx_stats: Sender<i64>, refresh_interval: Duration, filename: &str) {
     // Panicing in both cases if can't open the file
     let file = std::fs::File::open(filename).unwrap();
     let mut log_watcher = LogWatcher::register(filename.to_string()).unwrap();
@@ -50,7 +50,7 @@ pub fn read_logs(stats_channel: Sender<i64>, refresh_interval: Duration, filenam
 
     // Clean HashMatimestampp from timestamps that are too old already after initial read
     stats.retain(|key, _| acceptible_timestamps(refresh_interval).contains(key));
-    stats_channel.send(count_logs_in_interval(&stats)).unwrap();
+    tx_stats.send(count_logs_in_interval(&stats)).unwrap();
 
     // Continious file read after the file was read initially, in case it being written to continiously
     log_watcher.watch(&mut move |line: String| {
@@ -61,7 +61,7 @@ pub fn read_logs(stats_channel: Sender<i64>, refresh_interval: Duration, filenam
                 *count += 1;
             }
             stats.retain(|key, _| timestamps.contains(key));
-            stats_channel.send(count_logs_in_interval(&stats)).unwrap();
+            tx_stats.send(count_logs_in_interval(&stats)).unwrap();
         }
         LogWatcherAction::None
     });
