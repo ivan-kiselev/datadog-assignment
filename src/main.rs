@@ -42,7 +42,20 @@ fn main() {
         }
         let end = Utc::now().timestamp() as u64;
         thread::sleep(std::time::Duration::from_secs(
-            opts.interval as u64 - (end - start),
+            // Prevent overflow in case we didn't have logs for time more than refresh interval
+            if (opts.interval as u64) >= end - start {
+                opts.interval as u64 - (end - start)
+            } else {
+                0
+            },
         ));
     }
 }
+
+/*  let start = Utc::now().timestamp() as u64;
+let message = rx_stats.recv();
+...
+let end = Utc::now().timestamp() as u64;
+thread::sleep(std::time::Duration::from_secs(
+    opts.interval as u64 - (end - start),
+)); */

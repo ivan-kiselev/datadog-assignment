@@ -1,12 +1,12 @@
 // Load ./parser_combinators.rs
 mod parser_combinators;
 
+use crate::parser_combinators::parsers;
 use chrono::{Duration, Utc};
 use std::io::BufRead;
 use std::sync::mpsc::Sender;
 extern crate logwatcher;
 use logwatcher::{LogWatcher, LogWatcherAction};
-use parser_combinators::parsers;
 use std::collections::HashMap;
 
 // Return range of unix timestamps indicatding now() substracted by refresh interval
