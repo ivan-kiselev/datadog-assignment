@@ -7,7 +7,7 @@ use std::thread;
 fn main() {
     let refresh_interval: i64 = 10;
     let (tx_stats, rx_stats): (Sender<i64>, Receiver<i64>) = mpsc::channel();
-    let _ = thread::spawn(move || {
+    thread::spawn(move || {
         clf_parser::read_logs(
             tx_stats,
             Duration::seconds(refresh_interval),
