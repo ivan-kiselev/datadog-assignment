@@ -54,17 +54,14 @@ pub fn read_logs(stats_channel: Sender<i64>, refresh_interval: Duration, filenam
 
     // Continious file read after the file was read initially, in case it being written to continiously
     log_watcher.watch(&mut move |line: String| {
-        match parsers::parse_log_entry(&line[..]) {
-            Ok(log) => {
-                let timestamps = acceptible_timestamps(refresh_interval);
-                if timestamps.contains(&log.timestamp.timestamp()) {
-                    let count = stats.entry(log.timestamp.timestamp()).or_insert(0);
-                    *count += 1;
-                }
-                stats.retain(|key, _| timestamps.contains(key));
-                stats_channel.send(count_logs_in_interval(&stats)).unwrap();
+        if let Ok(log) = parsers::parse_log_entry(&line[..]) {
+            let timestamps = acceptible_timestamps(refresh_interval);
+            if timestamps.contains(&log.timestamp.timestamp()) {
+                let count = stats.entry(log.timestamp.timestamp()).or_insert(0);
+                *count += 1;
             }
-            Err(err) => println!("{}", err),
+            stats.retain(|key, _| timestamps.contains(key));
+            stats_channel.send(count_logs_in_interval(&stats)).unwrap();
         }
         LogWatcherAction::None
     });
