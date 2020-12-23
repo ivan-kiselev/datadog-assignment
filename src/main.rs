@@ -1,11 +1,10 @@
-extern crate clf_parser;
 use chrono::Duration;
 use clap::Clap;
 use clf_parser::*;
+use std::io;
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
-
 /// Utility to parse a CLF log file
 /// reflects some statistics about rate and different endpoints
 #[derive(Clap)]
@@ -25,22 +24,41 @@ struct Opts {
     filename: String,
 }
 
-fn main() {
+fn main() -> Result<(), io::Error> {
     let opts: Opts = Opts::parse();
-    let refresh_interval = opts.refresh_interval;
+
+    let (tx_logs, rx_logs): (Sender<LogEntry>, Receiver<LogEntry>) = mpsc::channel();
+    let (tx_stats, rx_stats): (Sender<RenderMessage>, Receiver<RenderMessage>) = mpsc::channel();
+
+    // Spawn thread to read and follow the file
+    // Copy parameters as they are being consumed by threads
     let filename = opts.filename;
-    let (tx_stats, rx_stats): (Sender<LogEntry>, Receiver<LogEntry>) = mpsc::channel();
+    let refresh_interval = opts.refresh_interval;
+
     thread::spawn(move || {
         read_logs(
-            tx_stats,
+            tx_logs,
             Duration::seconds(refresh_interval as i64),
             &filename[..],
         );
     });
-    collect_stats(
-        rx_stats,
-        opts.refresh_interval,
-        opts.alert_interval,
-        opts.alert_treshold,
-    );
+
+    // Spawn thread to analyze logs and produce statistics
+    // Copy parameters as they are being consumed by threads
+    let refresh_interval = opts.refresh_interval;
+    let alerting_interval = opts.alert_interval;
+    let alerting_treshold = opts.alert_treshold;
+    thread::spawn(move || {
+        collect_stats(
+            rx_logs,
+            refresh_interval,
+            alerting_interval,
+            alerting_treshold,
+            tx_stats,
+        )
+    });
+
+    let mut screen = init_ui().unwrap();
+    draw(&mut screen, rx_stats)?;
+    Ok(())
 }

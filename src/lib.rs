@@ -1,5 +1,6 @@
 // Load ./parser_combinators.rs
 mod parser_combinators;
+mod ui;
 extern crate logwatcher;
 
 use chrono::{Duration, Utc};
@@ -10,21 +11,7 @@ use std::collections::HashMap;
 use std::io::BufRead;
 use std::sync::mpsc::RecvTimeoutError;
 use std::sync::mpsc::{Receiver, Sender};
-
-enum RenderMessage {
-    UI(UIUpdate),
-    Exit(bool),
-}
-
-pub struct UIUpdate {
-    alert: Alert,
-    stats: HashMap<String, i64>,
-}
-
-pub struct Alert {
-    active: bool,
-    value: i64,
-}
+pub use ui::{draw, init_ui, Alert, RenderMessage, UIUpdate};
 
 // Return range of unix timestamps indicatding now() substracted by refresh interval
 // We +1 in the end because Rust ranges are not inclusive on the right side..
@@ -71,6 +58,7 @@ pub fn collect_stats(
     refresh_interval: u64,
     alerting_interval: u64,
     alert_threshold: u64,
+    tx_stats: Sender<RenderMessage>,
 ) {
     // Hashmap with {section => hit_rate}, where section is '/users'
     let mut stats: HashMap<String, i64> = HashMap::new();
@@ -84,10 +72,11 @@ pub fn collect_stats(
         alerting_interval / refresh_interval
     } as usize;
     let mut alerting_buffer: CircularBuffer<i64> = CircularBuffer::new(max_alerting_buffer_len);
+    let recieve_timeout = std::time::Duration::from_secs(refresh_interval);
     // Start counter for watching average values over time
     let mut start = Utc::now().timestamp() as u64;
     loop {
-        let message = rx_stats.recv_timeout(std::time::Duration::from_secs(refresh_interval));
+        let message = rx_stats.recv_timeout(recieve_timeout);
         match message {
             Ok(log_entry) => {
                 let count = stats
@@ -116,14 +105,19 @@ pub fn collect_stats(
         let end = Utc::now().timestamp() as u64;
         if (end - start) >= refresh_interval {
             start = Utc::now().timestamp() as u64;
-            println!();
             let mut total = 0;
-            for (key, value) in &stats {
-                println!("Endpoint {} was hit {} times!", key, value);
+            for (_, value) in &stats {
                 total += value;
             }
             // Save amount of requests for the last refresh_interval to compare with alerting_treshold later
             alerting_buffer.push(total);
+            let mut render_message = RenderMessage::UI(UIUpdate {
+                stats: stats,
+                alert: Alert {
+                    active: false,
+                    value: 0,
+                },
+            });
             if alerting_buffer.len() == max_alerting_buffer_len {
                 // Calculate average hits over alert_interval
                 let avg_val_in_alert_interval = alerting_buffer
@@ -131,13 +125,16 @@ pub fn collect_stats(
                     .into_iter()
                     .sum::<i64>()
                     / (max_alerting_buffer_len * refresh_interval as usize) as i64;
+                if let RenderMessage::UI(ref mut message) = render_message {
+                    message.alert.value = avg_val_in_alert_interval;
+                }
                 if avg_val_in_alert_interval >= alert_threshold as i64 {
-                    println!(
-                        "The rate has exceeded treshold, the value: {}!",
-                        avg_val_in_alert_interval
-                    );
+                    if let RenderMessage::UI(ref mut message) = render_message {
+                        message.alert.active = true;
+                    }
                 };
             }
+            tx_stats.send(render_message).unwrap();
             stats = HashMap::default();
         }
     }
