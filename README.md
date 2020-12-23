@@ -12,3 +12,5 @@
     - If failed to parse response code => 0
 
 - parse_response_code and parse_response_size functions are almost identical, they just return slightly different type. It probably is possible to refactor it into using generics, but I'd not risk my time for that at this moment
+
+parse\_\*\_helper_dash could be probably generalized with polymorthic datatypes and (Default trait)[https://doc.rust-lang.org/std/default/trait.Default.html], but again, at this moment it'd make it just more confusing.

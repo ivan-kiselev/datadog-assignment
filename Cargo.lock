@@ -100,6 +100,7 @@ dependencies = [
  "clap",
  "logwatcher",
  "nom",
+ "rbl_circular_buffer",
 ]
 
 [[package]]
@@ -263,6 +264,12 @@ name = "radium"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "941ba9d78d8e2f7ce474c015eea4d9c6d25b6a3327f9832ee29a4de27f91bbb8"
+
+[[package]]
+name = "rbl_circular_buffer"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f15557a07abaf2eff47c8f6b50dbf7d78a7043d64a5720fe823687aab2d21aa0"
 
 [[package]]
 name = "ryu"

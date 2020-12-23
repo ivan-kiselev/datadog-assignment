@@ -4,7 +4,7 @@ extern crate logwatcher;
 
 use chrono::{Duration, Utc};
 use logwatcher::{LogWatcher, LogWatcherAction};
-pub use parser_combinators::LogEntry;
+pub use parser_combinators::*;
 use std::io::BufRead;
 use std::sync::mpsc::Sender;
 
@@ -25,10 +25,10 @@ pub fn read_logs(tx_stats: Sender<LogEntry>, refresh_interval: Duration, filenam
     let lines = std::io::BufReader::new(&file).lines();
     for line in lines {
         if let Ok(unparsed_log) = line {
-            if let Ok(log) = parser_combinators::parsers::parse_log_entry(&unparsed_log[..]) {
-                // Generate set of Unix timestamps according to refresh window
+            if let Ok(log) = parsers::parse_log_entry(&unparsed_log[..]) {
+                // Generate set of Unix timestamps according to refresh window and check
+                // if the log entry is within this timestamp
                 if acceptible_timestamps(refresh_interval).contains(&log.timestamp.timestamp()) {
-                    // Check if log entry's timestamp is within previously generated timestamps HashMap
                     tx_stats.send(log).unwrap();
                 }
             }
@@ -37,7 +37,7 @@ pub fn read_logs(tx_stats: Sender<LogEntry>, refresh_interval: Duration, filenam
 
     // Continious file read after the file was read initially, in case it being written to continiously
     log_watcher.watch(&mut move |line: String| {
-        if let Ok(log) = parser_combinators::parsers::parse_log_entry(&line[..]) {
+        if let Ok(log) = parsers::parse_log_entry(&line[..]) {
             if acceptible_timestamps(refresh_interval).contains(&log.timestamp.timestamp()) {
                 tx_stats.send(log).unwrap();
             }
