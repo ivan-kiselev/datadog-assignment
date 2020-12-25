@@ -9,7 +9,7 @@ pub use parser_combinators::*;
 use rbl_circular_buffer::*;
 use std::collections::HashMap;
 use std::io::BufRead;
-use std::sync::mpsc::RecvTimeoutError;
+use std::net::IpAddr;
 use std::sync::mpsc::{Receiver, Sender};
 pub use ui::{draw, init_ui, RenderMessage, UIUpdate};
 
@@ -61,8 +61,8 @@ pub fn collect_stats(
     tx_stats: Sender<RenderMessage>,
 ) {
     // Hashmap with {section => hit_rate}, where section is '/users'
-    let mut stats: HashMap<String, i64> = HashMap::new();
-
+    let mut stats_endpoints: HashMap<String, i64> = HashMap::new();
+    let mut stats_addresses: HashMap<IpAddr, i64> = HashMap::new();
     // A circular buffer for collect alerting values
     // pushing to CircularBuffer<T> of len that equels its max capacity results in replacing first element
     // making it simple FIFO perfectly suitable for keeping values exclusively relevant for alerting
@@ -79,7 +79,8 @@ pub fn collect_stats(
         let message = rx_logs.recv_timeout(recieve_timeout);
         match message {
             Ok(log_entry) => {
-                let count = stats
+                // Increment endpoint hits
+                let count_endpoints = stats_endpoints
                     .entry(
                         log_entry
                             .request
@@ -90,7 +91,11 @@ pub fn collect_stats(
                             .to_owned(),
                     )
                     .or_insert(0);
-                *count += 1;
+                *count_endpoints += 1;
+
+                // Increment IP address requests count
+                let count_addresses = stats_addresses.entry(log_entry.ip_address).or_insert(0);
+                *count_addresses += 1;
             }
             _ => (),
         }
@@ -98,15 +103,16 @@ pub fn collect_stats(
         if (end - start) >= refresh_interval {
             start = Utc::now().timestamp() as u64;
             let mut total = 0;
-            for (_, value) in &stats {
+            for (_, value) in &stats_endpoints {
                 total += value;
             }
             // Save amount of requests for the last refresh_interval to compare with alerting_treshold later
             alerting_buffer.push(total);
             let mut render_message = RenderMessage::UI(UIUpdate {
-                stats: stats,
+                stats_endpoints: stats_endpoints,
                 avg_rate: total as u64 / refresh_interval,
                 treshold_reached: false,
+                stats_addresses: stats_addresses.clone(),
             });
             if alerting_buffer.len() == max_alerting_buffer_len {
                 // Calculate average hits over alert_interval
@@ -122,7 +128,9 @@ pub fn collect_stats(
                 };
             }
             tx_stats.send(render_message).unwrap();
-            stats = HashMap::default();
+            // Refresh stats between refresh intervals
+            stats_endpoints = HashMap::default();
+            stats_addresses = HashMap::default();
         }
     }
 }
