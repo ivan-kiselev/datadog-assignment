@@ -40,7 +40,6 @@ pub fn read_logs(tx_logs: Sender<LogEntry>, refresh_interval: Duration, filename
             }
         }
     }
-
     // Continious file read after the file was read initially, in case it being written to continiously
     log_watcher.watch(&mut move |line: String| {
         if let Ok(log) = parsers::parse_log_entry(&line[..]) {
