@@ -23,6 +23,7 @@ pub struct UIUpdate {
     pub stats_addresses: HashMap<IpAddr, i64>,
     pub avg_rate: u64,
     pub treshold_reached: bool,
+    pub log_samples: Vec<String>,
 }
 
 // Some hell of a type, UIs are not easy
@@ -53,6 +54,7 @@ where
             let mut stats_text = vec![];
             let mut stats_endpoints = vec![];
             let mut stats_addresses = vec![];
+            let mut log_samples = vec![];
             let mut border_alert_style = Style::default().fg(Color::White);
             if let Ok(message) = rx_stats.recv() {
                 // Modify UI content depending on the content of received message
@@ -113,7 +115,7 @@ where
                         sorted_endpoints.sort_by(|a, b| b.1.cmp(a.1));
                         sorted_addresses.sort_by(|a, b| b.1.cmp(&a.1));
 
-                        // Build table widgets with statistics
+                        // Build table widgets with statistics over endpoints and IP addresses
                         for (k, v) in sorted_endpoints.iter() {
                             stats_endpoints.push(Row::StyledData(
                                 vec![format!("/{}/*", k), v.to_string()].into_iter(),
@@ -125,6 +127,11 @@ where
                                 vec![k.to_string(), v.to_string()].into_iter(),
                                 Style::default().fg(Color::White),
                             ));
+                        }
+
+                        // Build List widget with log samples
+                        for log in ui_update.log_samples.clone().into_iter() {
+                            log_samples.push(Spans::from(Span::raw(log)));
                         }
                     }
                     _ => (),
@@ -162,6 +169,11 @@ where
             .widths(&[Constraint::Percentage(80), Constraint::Percentage(20)])
             .column_spacing(1);
 
+            let log_samples = Paragraph::new(log_samples)
+                .block(create_block("Log samples"))
+                .alignment(Alignment::Left)
+                .wrap(Wrap { trim: true });
+            /* Divide space of the screen to different chunks */
             // Divide space horizontally
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
@@ -178,11 +190,16 @@ where
                 .direction(Direction::Vertical)
                 .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
                 .split(bottom_chunks[0]);
+            let right_bottom_chunks = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([Constraint::Percentage(70), Constraint::Percentage(30)].as_ref())
+                .split(bottom_chunks[1]);
+
+            // Render everything!
             f.render_widget(paragraph, chunks[0]);
             f.render_widget(stats_endpoints, left_bottom_chunks[0]);
             f.render_widget(stats_addresses, left_bottom_chunks[1]);
-            let block = Block::default().title("Block 4").borders(Borders::ALL);
-            f.render_widget(block, bottom_chunks[1]);
+            f.render_widget(log_samples, right_bottom_chunks[1]);
         })?;
     }
 }

@@ -32,14 +32,7 @@ impl Display for LogEntry {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "\n
-                ip_address: {:?}\n
-                user_agent: {} \n
-                user_id: {}\n
-                timestamp: {} \n
-                request: {}\n
-                response_code: {}\n
-                size: {}\n",
+            "{:?} {} {} {} {} {} {}",
             self.ip_address,
             self.identifier,
             self.user_id,

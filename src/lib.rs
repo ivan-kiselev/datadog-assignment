@@ -63,6 +63,7 @@ pub fn collect_stats(
     // Hashmap with {section => hit_rate}, where section is '/users'
     let mut stats_endpoints: HashMap<String, i64> = HashMap::new();
     let mut stats_addresses: HashMap<IpAddr, i64> = HashMap::new();
+    let mut log_samples: CircularBuffer<String> = CircularBuffer::new(10);
     // A circular buffer for collect alerting values
     // pushing to CircularBuffer<T> of len that equels its max capacity results in replacing first element
     // making it simple FIFO perfectly suitable for keeping values exclusively relevant for alerting
@@ -96,6 +97,9 @@ pub fn collect_stats(
                 // Increment IP address requests count
                 let count_addresses = stats_addresses.entry(log_entry.ip_address).or_insert(0);
                 *count_addresses += 1;
+
+                // Collect 10 Log samples
+                log_samples.push(log_entry.to_string());
             }
             _ => (),
         }
@@ -113,6 +117,7 @@ pub fn collect_stats(
                 avg_rate: total as u64 / refresh_interval,
                 treshold_reached: false,
                 stats_addresses: stats_addresses.clone(),
+                log_samples: log_samples.to_owned().collect::<Vec<String>>(),
             });
             if alerting_buffer.len() == max_alerting_buffer_len {
                 // Calculate average hits over alert_interval
