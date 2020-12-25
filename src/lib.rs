@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::io::BufRead;
 use std::sync::mpsc::RecvTimeoutError;
 use std::sync::mpsc::{Receiver, Sender};
-pub use ui::{draw, init_ui, Alert, RenderMessage, UIUpdate};
+pub use ui::{draw, init_ui, RenderMessage, UIUpdate};
 
 // Return range of unix timestamps indicatding now() substracted by refresh interval
 // We +1 in the end because Rust ranges are not inclusive on the right side..
@@ -22,7 +22,7 @@ fn acceptible_timestamps(refresh_interval: Duration) -> std::ops::Range<i64> {
 }
 
 // Read logs and send log entries through Sender (tx_stats)
-pub fn read_logs(tx_stats: Sender<LogEntry>, refresh_interval: Duration, filename: &str) {
+pub fn read_logs(tx_logs: Sender<LogEntry>, refresh_interval: Duration, filename: &str) {
     // Panicing in both cases if can't open the file
     let file = std::fs::File::open(filename).unwrap();
     let mut log_watcher = LogWatcher::register(filename.to_string()).unwrap();
@@ -35,7 +35,7 @@ pub fn read_logs(tx_stats: Sender<LogEntry>, refresh_interval: Duration, filenam
                 // Generate set of Unix timestamps according to refresh window and check
                 // if the log entry is within this timestamp
                 if acceptible_timestamps(refresh_interval).contains(&log.timestamp.timestamp()) {
-                    tx_stats.send(log).unwrap();
+                    tx_logs.send(log).unwrap();
                 }
             }
         }
@@ -45,7 +45,7 @@ pub fn read_logs(tx_stats: Sender<LogEntry>, refresh_interval: Duration, filenam
     log_watcher.watch(&mut move |line: String| {
         if let Ok(log) = parsers::parse_log_entry(&line[..]) {
             if acceptible_timestamps(refresh_interval).contains(&log.timestamp.timestamp()) {
-                tx_stats.send(log).unwrap();
+                tx_logs.send(log).unwrap();
             }
         }
         LogWatcherAction::None
@@ -54,7 +54,7 @@ pub fn read_logs(tx_stats: Sender<LogEntry>, refresh_interval: Duration, filenam
 
 // Receive logs and aggregate them to data
 pub fn collect_stats(
-    rx_stats: Receiver<LogEntry>,
+    rx_logs: Receiver<LogEntry>,
     refresh_interval: u64,
     alerting_interval: u64,
     alert_threshold: u64,
@@ -76,7 +76,7 @@ pub fn collect_stats(
     // Start counter for watching average values over time
     let mut start = Utc::now().timestamp() as u64;
     loop {
-        let message = rx_stats.recv_timeout(recieve_timeout);
+        let message = rx_logs.recv_timeout(recieve_timeout);
         match message {
             Ok(log_entry) => {
                 let count = stats
@@ -92,15 +92,7 @@ pub fn collect_stats(
                     .or_insert(0);
                 *count += 1;
             }
-            Err(RecvTimeoutError::Disconnected) => {
-                println!("File-reading thread has failed, check file path and permissions")
-            }
-            Err(RecvTimeoutError::Timeout) => {
-                println!(
-                    "Logs stopped coming, timeout of {} seconds occured!",
-                    refresh_interval
-                )
-            }
+            _ => (),
         }
         let end = Utc::now().timestamp() as u64;
         if (end - start) >= refresh_interval {
@@ -113,10 +105,8 @@ pub fn collect_stats(
             alerting_buffer.push(total);
             let mut render_message = RenderMessage::UI(UIUpdate {
                 stats: stats,
-                alert: Alert {
-                    active: false,
-                    value: 0,
-                },
+                avg_rate: total as u64 / refresh_interval,
+                treshold_reached: false,
             });
             if alerting_buffer.len() == max_alerting_buffer_len {
                 // Calculate average hits over alert_interval
@@ -125,12 +115,9 @@ pub fn collect_stats(
                     .into_iter()
                     .sum::<i64>()
                     / (max_alerting_buffer_len * refresh_interval as usize) as i64;
-                if let RenderMessage::UI(ref mut message) = render_message {
-                    message.alert.value = avg_val_in_alert_interval;
-                }
                 if avg_val_in_alert_interval >= alert_threshold as i64 {
                     if let RenderMessage::UI(ref mut message) = render_message {
-                        message.alert.active = true;
+                        message.treshold_reached = true;
                     }
                 };
             }

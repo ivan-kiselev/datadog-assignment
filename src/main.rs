@@ -7,7 +7,7 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
 /// Utility to parse a CLF log file
 /// reflects some statistics about rate and different endpoints
-#[derive(Clap)]
+#[derive(Clap, Clone)]
 #[clap(version = "0.1", author = "Ivan Kiselev. <kiselev_ivan@pm.me>")]
 struct Opts {
     /// Sets an interval of refreshing the statistics in seconds, max 256
@@ -27,14 +27,17 @@ struct Opts {
 fn main() -> Result<(), io::Error> {
     let opts: Opts = Opts::parse();
 
+    // Channel between log readre and stats producer
     let (tx_logs, rx_logs): (Sender<LogEntry>, Receiver<LogEntry>) = mpsc::channel();
+
+    //Channel between stats producer and UI renderer
     let (tx_stats, rx_stats): (Sender<RenderMessage>, Receiver<RenderMessage>) = mpsc::channel();
 
     // Spawn thread to read and follow the file
     // Copy parameters as they are being consumed by threads
-    let filename = opts.filename;
+    //let filename = opts.filename.clone();
     let refresh_interval = opts.refresh_interval;
-
+    let filename = opts.filename.clone();
     thread::spawn(move || {
         read_logs(
             tx_logs,
@@ -57,8 +60,14 @@ fn main() -> Result<(), io::Error> {
             tx_stats,
         )
     });
-
     let mut screen = init_ui().unwrap();
-    draw(&mut screen, rx_stats)?;
+    draw(
+        &mut screen,
+        rx_stats,
+        opts.refresh_interval.clone(),
+        opts.alert_interval.clone(),
+        opts.alert_treshold.clone(),
+        opts.filename.clone(),
+    )?;
     Ok(())
 }
