@@ -44,9 +44,7 @@ pub fn read_logs(tx_logs: Sender<LogEntry>, refresh_interval: Duration, filename
     // Continious file read after the file was read initially, in case it being written to continiously
     log_watcher.watch(&mut move |line: String| {
         if let Ok(log) = parsers::parse_log_entry(&line[..]) {
-            if acceptible_timestamps(refresh_interval).contains(&log.timestamp.timestamp()) {
-                tx_logs.send(log).unwrap();
-            }
+            tx_logs.send(log).unwrap();
         }
         LogWatcherAction::None
     });
@@ -78,30 +76,27 @@ pub fn collect_stats(
     let mut start = Utc::now().timestamp() as u64;
     loop {
         let message = rx_logs.recv_timeout(recieve_timeout);
-        match message {
-            Ok(log_entry) => {
-                // Increment endpoint hits
-                let count_endpoints = stats_endpoints
-                    .entry(
-                        log_entry
-                            .request
-                            .path
-                            .clone()
-                            .split('/')
-                            .collect::<Vec<&str>>()[1]
-                            .to_owned(),
-                    )
-                    .or_insert(0);
-                *count_endpoints += 1;
+        if let Ok(log_entry) = message {
+            // Increment endpoint hits
+            let count_endpoints = stats_endpoints
+                .entry(
+                    log_entry
+                        .request
+                        .path
+                        .clone()
+                        .split('/')
+                        .collect::<Vec<&str>>()[1]
+                        .to_owned(),
+                )
+                .or_insert(0);
+            *count_endpoints += 1;
 
-                // Increment IP address requests count
-                let count_addresses = stats_addresses.entry(log_entry.ip_address).or_insert(0);
-                *count_addresses += 1;
+            // Increment IP address requests count
+            let count_addresses = stats_addresses.entry(log_entry.ip_address).or_insert(0);
+            *count_addresses += 1;
 
-                // Collect 10 Log samples
-                log_samples.push(log_entry.to_string());
-            }
-            _ => (),
+            // Collect 10 Log samples
+            log_samples.push(log_entry.to_string());
         }
         let end = Utc::now().timestamp() as u64;
         if (end - start) >= refresh_interval {

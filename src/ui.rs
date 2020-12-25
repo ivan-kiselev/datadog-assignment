@@ -129,7 +129,7 @@ where
                             ));
                         }
 
-                        // Build List widget with log samples
+                        //Build List widget with log samples
                         for log in ui_update.log_samples.clone().into_iter() {
                             log_samples.push(Spans::from(Span::raw(log)));
                         }
