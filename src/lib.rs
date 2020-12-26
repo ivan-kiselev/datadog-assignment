@@ -7,10 +7,15 @@ use chrono::{Duration, Utc};
 use logwatcher::{LogWatcher, LogWatcherAction};
 pub use parser_combinators::*;
 use rbl_circular_buffer::*;
-use std::collections::HashMap;
-use std::io::BufRead;
-use std::net::IpAddr;
-use std::sync::mpsc::{Receiver, Sender};
+use std::{
+    collections::HashMap,
+    io,
+    io::BufRead,
+    net::IpAddr,
+    sync::mpsc::{Receiver, SendError, Sender},
+};
+use termion::{event::Key, input::TermRead};
+
 pub use ui::{draw, init_ui, RenderMessage, UIUpdate};
 
 // Return range of unix timestamps indicatding now() substracted by refresh interval
@@ -134,4 +139,18 @@ pub fn collect_stats(
             stats_addresses = HashMap::default();
         }
     }
+}
+
+pub fn keyboard_listener(
+    tx_keyboard: Sender<RenderMessage>,
+) -> Result<(), SendError<RenderMessage>> {
+    let stdin = io::stdin();
+    for evt in stdin.keys() {
+        if let Ok(key) = evt {
+            if key == Key::Char('q') {
+                tx_keyboard.send(RenderMessage::Exit)?
+            }
+        }
+    }
+    Ok(())
 }

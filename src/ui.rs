@@ -1,6 +1,5 @@
 use chrono::Utc;
-use std::net::IpAddr;
-use std::{collections::HashMap, io, sync::mpsc::Receiver};
+use std::{collections::HashMap, io, net::IpAddr, sync::mpsc::Receiver};
 use termion::{
     raw::{IntoRawMode, RawTerminal},
     screen::AlternateScreen,
@@ -16,7 +15,7 @@ use tui::{
 
 pub enum RenderMessage {
     UI(UIUpdate),
-    Exit(bool),
+    Exit,
 }
 
 pub struct UIUpdate {
@@ -102,6 +101,7 @@ where
     let key_style = Style::default().fg(Color::Cyan);
 
     loop {
+        let mut exit_signal = false;
         terminal.draw(|f| {
             // Set default content of the UI
             let mut stats_text = vec![];
@@ -182,7 +182,7 @@ where
                             log_samples.push(Spans::from(Span::raw(log)));
                         }
                     }
-                    _ => (),
+                    RenderMessage::Exit => exit_signal = true,
                 }
             };
 
@@ -259,5 +259,8 @@ where
             f.render_widget(stats_addresses, left_bottom_chunks[1]);
             f.render_widget(log_samples, right_bottom_chunks[1]);
         })?;
+        if exit_signal {
+            return Ok(());
+        }
     }
 }

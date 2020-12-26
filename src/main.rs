@@ -50,15 +50,17 @@ fn main() -> Result<(), io::Error> {
     let refresh_interval = opts.refresh_interval;
     let alerting_interval = opts.alert_interval;
     let alerting_treshold = opts.alert_treshold;
+    let stats_sender = tx_stats.clone();
     thread::spawn(move || {
         collect_stats(
             rx_logs,
             refresh_interval,
             alerting_interval,
             alerting_treshold,
-            tx_stats,
+            stats_sender,
         )
     });
+    thread::spawn(move || keyboard_listener(tx_stats));
     let mut screen = init_ui().unwrap();
     draw(
         &mut screen,
