@@ -1,3 +1,4 @@
+use chrono::Utc;
 use std::net::IpAddr;
 use std::{collections::HashMap, io, sync::mpsc::Receiver};
 use termion::{
@@ -24,6 +25,50 @@ pub struct UIUpdate {
     pub avg_rate: u64,
     pub treshold_reached: bool,
     pub log_samples: Vec<String>,
+    pub avg_within_alert_interval: i64,
+}
+
+struct AlertState {
+    change_time: String,
+    treshold_reached: bool,
+    avg_within_alert_interval: i64,
+}
+
+impl AlertState {
+    fn reverse(&mut self) {
+        self.treshold_reached = !self.treshold_reached;
+        self.change_time = Utc::now().format("%H:%M").to_string();
+    }
+
+    fn to_spans(&self) -> Vec<Spans> {
+        if self.treshold_reached {
+            vec![
+                Spans::from(Span::styled(
+                    String::from("State: Firing"),
+                    Style::default().fg(Color::Red),
+                )),
+                Spans::from(Span::styled(
+                    format!("Firing since: {}", self.change_time),
+                    Style::default().fg(Color::Red),
+                )),
+                Spans::from(Span::styled(
+                    format!("Avg rate: {}", self.avg_within_alert_interval),
+                    Style::default().fg(Color::Red),
+                )),
+            ]
+        } else {
+            vec![
+                Spans::from(Span::styled(
+                    String::from("State: Resolved"),
+                    Style::default().fg(Color::Green),
+                )),
+                Spans::from(Span::styled(
+                    format!("\nResolved at: {}", self.change_time),
+                    Style::default().fg(Color::Green),
+                )),
+            ]
+        }
+    }
 }
 
 // Some hell of a type, UIs are not easy
@@ -47,7 +92,15 @@ pub fn draw<B>(
 where
     B: Backend,
 {
-    //    let events = Events::new();
+    // State for the alert block, have to be in outer scope to persist
+    let mut alert_state = AlertState {
+        treshold_reached: false,
+        change_time: String::from(""),
+        avg_within_alert_interval: 0,
+    };
+    let value_style = Style::default().fg(Color::White);
+    let key_style = Style::default().fg(Color::Cyan);
+
     loop {
         terminal.draw(|f| {
             // Set default content of the UI
@@ -55,55 +108,50 @@ where
             let mut stats_endpoints = vec![];
             let mut stats_addresses = vec![];
             let mut log_samples = vec![];
-            let mut border_alert_style = Style::default().fg(Color::White);
+            let mut alert_text = vec![Spans::from(vec![Span::styled(
+                "Alert didn't happen to fire since start",
+                Style::default().fg(Color::White),
+            )])];
+            let mut alert_style = Style::default().fg(Color::White);
             if let Ok(message) = rx_stats.recv() {
                 // Modify UI content depending on the content of received message
                 match message {
                     RenderMessage::UI(ui_update) => {
-                        if ui_update.treshold_reached {
-                            border_alert_style = Style::default().fg(Color::Red);
+                        /* Alerting */
+                        if ui_update.treshold_reached != alert_state.treshold_reached {
+                            alert_state.reverse();
                         }
+                        alert_state.avg_within_alert_interval = ui_update.avg_within_alert_interval;
+                        if alert_state.change_time != *"" {
+                            alert_text = alert_state.to_spans();
+                            alert_style = if alert_state.treshold_reached {
+                                Style::default().fg(Color::Red)
+                            } else {
+                                Style::default().fg(Color::Green)
+                            }
+                        };
+                        /* End Alerting */
+
                         stats_text = vec![
                             Spans::from(vec![
                                 Span::styled(
                                     format!("Avg hit rate in last {}s: ", refresh_interval),
-                                    Style::default().fg(Color::Cyan),
+                                    key_style,
                                 ),
                                 Span::styled(
                                     format!("{}req/s | ", ui_update.avg_rate),
-                                    border_alert_style,
+                                    alert_style,
                                 ),
-                                Span::styled(
-                                    "Refresh interval: ",
-                                    Style::default().fg(Color::Cyan),
-                                ),
-                                Span::styled(
-                                    format!("{}s | ", refresh_interval),
-                                    Style::default().fg(Color::White),
-                                ),
-                                Span::styled(
-                                    "Alerting interval: ",
-                                    Style::default().fg(Color::Cyan),
-                                ),
-                                Span::styled(
-                                    format!("{}s | ", alerting_interval),
-                                    Style::default().fg(Color::White),
-                                ),
+                                Span::styled("Refresh interval: ", key_style),
+                                Span::styled(format!("{}s | ", refresh_interval), value_style),
+                                Span::styled("Alerting interval: ", key_style),
+                                Span::styled(format!("{}s | ", alerting_interval), value_style),
                             ]),
                             Spans::from(vec![
-                                Span::styled(
-                                    "Alerting treshold: ",
-                                    Style::default().fg(Color::Cyan),
-                                ),
-                                Span::styled(
-                                    format!("{}req/s | ", alerting_treshold),
-                                    border_alert_style,
-                                ),
-                                Span::styled("Log file: ", Style::default().fg(Color::Cyan)),
-                                Span::styled(
-                                    format!("{} | ", filename),
-                                    Style::default().fg(Color::White),
-                                ),
+                                Span::styled("Alerting treshold: ", key_style),
+                                Span::styled(format!("{}req/s | ", alerting_treshold), alert_style),
+                                Span::styled("Log file: ", key_style),
+                                Span::styled(format!("{} | ", filename), value_style),
                             ]),
                         ];
 
@@ -130,7 +178,7 @@ where
                         }
 
                         //Build List widget with log samples
-                        for log in ui_update.log_samples.clone().into_iter() {
+                        for log in ui_update.log_samples.into_iter() {
                             log_samples.push(Spans::from(Span::raw(log)));
                         }
                     }
@@ -139,17 +187,20 @@ where
             };
 
             let create_block = |title| {
-                Block::default()
-                    .borders(Borders::ALL)
-                    .border_style(border_alert_style)
-                    .title(Span::styled(
-                        title,
-                        Style::default().add_modifier(Modifier::BOLD),
-                    ))
+                Block::default().borders(Borders::ALL).title(Span::styled(
+                    title,
+                    Style::default().add_modifier(Modifier::BOLD),
+                ))
             };
 
-            let paragraph = Paragraph::new(stats_text)
-                .block(create_block("All stats"))
+            let alert = Paragraph::new(alert_text)
+                .block(create_block("Alert"))
+                .alignment(Alignment::Left)
+                .style(alert_style)
+                .wrap(Wrap { trim: true });
+
+            let stats_general = Paragraph::new(stats_text)
+                .block(create_block("General Stats"))
                 .alignment(Alignment::Center)
                 .wrap(Wrap { trim: true });
 
@@ -181,6 +232,12 @@ where
                 .constraints([Constraint::Percentage(10), Constraint::Percentage(80)].as_ref())
                 .split(f.size());
 
+            // Divide top space vertically
+            let top_chunks = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([Constraint::Percentage(20), Constraint::Percentage(80)].as_ref())
+                .split(chunks[0]);
+
             // Divide bottom space vertically
             let bottom_chunks = Layout::default()
                 .direction(Direction::Horizontal)
@@ -196,7 +253,8 @@ where
                 .split(bottom_chunks[1]);
 
             // Render everything!
-            f.render_widget(paragraph, chunks[0]);
+            f.render_widget(alert, top_chunks[0]);
+            f.render_widget(stats_general, top_chunks[1]);
             f.render_widget(stats_endpoints, left_bottom_chunks[0]);
             f.render_widget(stats_addresses, left_bottom_chunks[1]);
             f.render_widget(log_samples, right_bottom_chunks[1]);

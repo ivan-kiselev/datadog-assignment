@@ -17,7 +17,7 @@ struct Opts {
     #[clap(long, default_value = "20")]
     alert_interval: u64,
     /// Treshold for the alert
-    #[clap(long, default_value = "1")]
+    #[clap(long, default_value = "10")]
     alert_treshold: u64,
     /// Path to the file to watch
     #[clap(short, long, default_value = "/tmp/access.log")]
@@ -35,7 +35,6 @@ fn main() -> Result<(), io::Error> {
 
     // Spawn thread to read and follow the file
     // Copy parameters as they are being consumed by threads
-    //let filename = opts.filename.clone();
     let refresh_interval = opts.refresh_interval;
     let filename = opts.filename.clone();
     thread::spawn(move || {
@@ -64,10 +63,10 @@ fn main() -> Result<(), io::Error> {
     draw(
         &mut screen,
         rx_stats,
-        opts.refresh_interval.clone(),
-        opts.alert_interval.clone(),
-        opts.alert_treshold.clone(),
-        opts.filename.clone(),
+        opts.refresh_interval,
+        opts.alert_interval,
+        opts.alert_treshold,
+        opts.filename,
     )?;
     Ok(())
 }

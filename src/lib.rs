@@ -101,17 +101,18 @@ pub fn collect_stats(
         if (end - start) >= refresh_interval {
             start = Utc::now().timestamp() as u64;
             let mut total = 0;
-            for (_, value) in &stats_endpoints {
+            for value in stats_endpoints.values() {
                 total += value;
             }
             // Save amount of requests for the last refresh_interval to compare with alerting_treshold later
             alerting_buffer.push(total);
             let mut render_message = RenderMessage::UI(UIUpdate {
-                stats_endpoints: stats_endpoints,
+                stats_endpoints,
                 avg_rate: total as u64 / refresh_interval,
                 treshold_reached: false,
                 stats_addresses: stats_addresses.clone(),
                 log_samples: log_samples.to_owned().collect::<Vec<String>>(),
+                avg_within_alert_interval: 0,
             });
             if alerting_buffer.len() == max_alerting_buffer_len {
                 // Calculate average hits over alert_interval
@@ -123,6 +124,7 @@ pub fn collect_stats(
                 if avg_val_in_alert_interval >= alert_threshold as i64 {
                     if let RenderMessage::UI(ref mut message) = render_message {
                         message.treshold_reached = true;
+                        message.avg_within_alert_interval = avg_val_in_alert_interval;
                     }
                 };
             }

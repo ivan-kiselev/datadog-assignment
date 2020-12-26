@@ -1,4 +1,7 @@
-221_851 req/s ~150 MB of Memory
+220k req/s ~150 MB of Memory
+500 req/s ~6-11MB
+
+There's no guarantee of logs being sorted in the file, so while initally reading the file - each entry is matched against range of time `(now - refresh_interval)..(now)`, which adds some computational cost and you might experience some slow starts on big log files with 100k+ entries (well, depends on disk and CPU).
 
 <h3>Things to improve</h3>
 
@@ -12,6 +15,7 @@
     - if failed to parse IP address => 0.0.0.0
     - If failed to parse user_id => "-"
     - If failed to parse response code => 0
+    - If failed to parse date => 1970-01-01T00:00:00-00:00
 
 - parse_response_code and parse_response_size functions are almost identical, they just return slightly different type. It probably is possible to refactor it into using generics, but I'd not risk my time for that at this moment
 - File descriptor changes are not handled
