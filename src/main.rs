@@ -22,6 +22,9 @@ struct Opts {
     /// Path to the file to watch
     #[clap(short, long, default_value = "/tmp/access.log")]
     filename: String,
+    /// Path to the file to watch
+    #[clap(long)]
+    follow_only: bool,
 }
 
 fn main() -> Result<(), io::Error> {
@@ -37,8 +40,10 @@ fn main() -> Result<(), io::Error> {
     // Copy parameters as they are being consumed by threads
     let refresh_interval = opts.refresh_interval;
     let filename = opts.filename.clone();
+    let follow = opts.follow_only;
     thread::spawn(move || {
         read_logs(
+            follow,
             tx_logs,
             Duration::seconds(refresh_interval as i64),
             &filename[..],
@@ -60,8 +65,14 @@ fn main() -> Result<(), io::Error> {
             stats_sender,
         )
     });
-    thread::spawn(move || keyboard_listener(tx_stats));
+    let keys_sender = tx_stats.clone();
+    thread::spawn(move || keyboard_listener(keys_sender));
     let mut screen = init_ui().unwrap();
+
+    // Provoke instant rendering of the UI instead of waiting for first cycle of refresh interval
+    tx_stats
+        .send(RenderMessage::UI(UIUpdate::default()))
+        .unwrap();
     draw(
         &mut screen,
         rx_stats,

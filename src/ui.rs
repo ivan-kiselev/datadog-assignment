@@ -27,6 +27,19 @@ pub struct UIUpdate {
     pub avg_within_alert_interval: i64,
 }
 
+impl Default for UIUpdate {
+    fn default() -> Self {
+        UIUpdate {
+            stats_endpoints: HashMap::new(),
+            stats_addresses: HashMap::new(),
+            avg_rate: 0,
+            treshold_reached: false,
+            log_samples: vec![],
+            avg_within_alert_interval: 0,
+        }
+    }
+}
+
 struct AlertState {
     change_time: String,
     treshold_reached: bool,
@@ -36,7 +49,7 @@ struct AlertState {
 impl AlertState {
     fn reverse(&mut self) {
         self.treshold_reached = !self.treshold_reached;
-        self.change_time = Utc::now().format("%H:%M").to_string();
+        self.change_time = Utc::now().format("%H:%M:%S").to_string();
     }
 
     fn to_spans(&self) -> Vec<Spans> {

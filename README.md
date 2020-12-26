@@ -1,5 +1,5 @@
 220k req/s ~150 MB of Memory
-500 req/s ~6-11MB
+500 req/s ~6-11KB
 
 There's no guarantee of logs being sorted in the file, so while initally reading the file - each entry is matched against range of time `(now - refresh_interval)..(now)`, which adds some computational cost and you might experience some slow starts on big log files with 100k+ entries (well, depends on disk and CPU).
 

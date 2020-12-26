@@ -27,20 +27,28 @@ fn acceptible_timestamps(refresh_interval: Duration) -> std::ops::Range<i64> {
 }
 
 // Read logs and send log entries through Sender (tx_stats)
-pub fn read_logs(tx_logs: Sender<LogEntry>, refresh_interval: Duration, filename: &str) {
+pub fn read_logs(
+    follow: bool,
+    tx_logs: Sender<LogEntry>,
+    refresh_interval: Duration,
+    filename: &str,
+) {
     // Panicing in both cases if can't open the file
-    let file = std::fs::File::open(filename).unwrap();
     let mut log_watcher = LogWatcher::register(filename.to_string()).unwrap();
 
-    // Initial file read on the start
-    let lines = std::io::BufReader::new(&file).lines();
-    for line in lines {
-        if let Ok(unparsed_log) = line {
-            if let Ok(log) = parsers::parse_log_entry(&unparsed_log[..]) {
-                // Generate set of Unix timestamps according to refresh window and check
-                // if the log entry is within this timestamp
-                if acceptible_timestamps(refresh_interval).contains(&log.timestamp.timestamp()) {
-                    tx_logs.send(log).unwrap();
+    if !follow {
+        // Initial file read on the start
+        let file = std::fs::File::open(filename).unwrap();
+        let lines = std::io::BufReader::new(&file).lines();
+        for line in lines {
+            if let Ok(unparsed_log) = line {
+                if let Ok(log) = parsers::parse_log_entry(&unparsed_log[..]) {
+                    // Generate set of Unix timestamps according to refresh window and check
+                    // if the log entry is within this timestamp
+                    if acceptible_timestamps(refresh_interval).contains(&log.timestamp.timestamp())
+                    {
+                        tx_logs.send(log).unwrap();
+                    }
                 }
             }
         }
