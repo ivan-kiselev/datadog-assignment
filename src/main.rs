@@ -7,6 +7,7 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
 /// Utility to parse a CLF log file
 /// reflects some statistics about rate and different endpoints
+/// Developed in Rust 🦀 as an home-take assignment for DataDog interviewing process.
 #[derive(Clap, Clone)]
 #[clap(version = "0.1", author = "Ivan Kiselev. <kiselev_ivan@pm.me>")]
 struct Opts {

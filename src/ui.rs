@@ -34,7 +34,11 @@ impl Default for UIUpdate {
             stats_addresses: HashMap::new(),
             avg_rate: 0,
             treshold_reached: false,
-            log_samples: vec![],
+            log_samples: vec![
+                String::from("Waiting for data from file-reading thread"),
+                String::from("Waiting for data from file-reading thread"),
+                String::from("Waiting for data from file-reading thread"),
+            ],
             avg_within_alert_interval: 0,
         }
     }
