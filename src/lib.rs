@@ -69,10 +69,12 @@ pub fn collect_stats(
     alerting_interval: u64,
     alert_threshold: u64,
     tx_stats: Sender<RenderMessage>,
+    http_codes: Vec<u16>,
 ) {
     // Hashmap with {section => hit_rate}, where section is '/users'
-    let mut stats_endpoints: HashMap<String, i64> = HashMap::new();
-    let mut stats_addresses: HashMap<IpAddr, i64> = HashMap::new();
+    let mut stats_endpoints: HashMap<String, u64> = HashMap::new();
+    let mut stats_addresses: HashMap<IpAddr, u64> = HashMap::new();
+    let mut stats_http_codes: HashMap<u16, HashMap<String, u64>> = HashMap::new();
     let mut log_samples: CircularBuffer<String> = CircularBuffer::new(10);
     // A circular buffer for collect alerting values
     // pushing to CircularBuffer<T> of len that equels its max capacity results in replacing first element
@@ -82,7 +84,7 @@ pub fn collect_stats(
     } else {
         alerting_interval / refresh_interval
     } as usize;
-    let mut alerting_buffer: CircularBuffer<i64> = CircularBuffer::new(max_alerting_buffer_len);
+    let mut alerting_buffer: CircularBuffer<u64> = CircularBuffer::new(max_alerting_buffer_len);
     let recieve_timeout = std::time::Duration::from_secs(refresh_interval);
     // Start counter for watching average values over time
     let mut start = Utc::now().timestamp() as u64;
@@ -107,7 +109,26 @@ pub fn collect_stats(
             let count_addresses = stats_addresses.entry(log_entry.ip_address).or_insert(0);
             *count_addresses += 1;
 
-            // Collect 10 Log samples
+            // Increment HTTP codes requests count if the code in the list to watch
+            if http_codes.iter().any(|&i| i == log_entry.response_code) {
+                let count_http_codes = stats_http_codes
+                    .entry(log_entry.response_code)
+                    .or_insert_with(HashMap::new);
+                let count_http_codes_path = count_http_codes
+                    .entry(
+                        log_entry
+                            .request
+                            .path
+                            .clone()
+                            .split('/')
+                            .collect::<Vec<&str>>()[1]
+                            .to_owned(),
+                    )
+                    .or_insert(0);
+                *count_http_codes_path += 1;
+            };
+
+            // Collect 10 Log samples into FIFO buffer of limited capacity
             log_samples.push(log_entry.to_string());
         }
         let end = Utc::now().timestamp() as u64;
@@ -126,15 +147,16 @@ pub fn collect_stats(
                 stats_addresses: stats_addresses.clone(),
                 log_samples: log_samples.to_owned().collect::<Vec<String>>(),
                 avg_within_alert_interval: 0,
+                stats_http_codes,
             });
             if alerting_buffer.len() == max_alerting_buffer_len {
                 // Calculate average hits over alert_interval
                 let avg_val_in_alert_interval = alerting_buffer
-                    .collect::<Vec<i64>>()
+                    .collect::<Vec<u64>>()
                     .into_iter()
-                    .sum::<i64>()
-                    / (max_alerting_buffer_len * refresh_interval as usize) as i64;
-                if avg_val_in_alert_interval >= alert_threshold as i64 {
+                    .sum::<u64>()
+                    / (max_alerting_buffer_len * refresh_interval as usize) as u64;
+                if avg_val_in_alert_interval >= alert_threshold as u64 {
                     if let RenderMessage::UI(ref mut message) = render_message {
                         message.treshold_reached = true;
                         message.avg_within_alert_interval = avg_val_in_alert_interval;
@@ -145,6 +167,7 @@ pub fn collect_stats(
             // Refresh stats between refresh intervals
             stats_endpoints = HashMap::default();
             stats_addresses = HashMap::default();
+            stats_http_codes = HashMap::default();
         }
     }
 }

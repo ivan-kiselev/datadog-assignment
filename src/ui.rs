@@ -1,5 +1,5 @@
 use chrono::Utc;
-use std::{collections::HashMap, io, net::IpAddr, sync::mpsc::Receiver};
+use std::{collections::HashMap, io, net::IpAddr, sync::mpsc::Receiver, vec::IntoIter};
 use termion::{
     raw::{IntoRawMode, RawTerminal},
     screen::AlternateScreen,
@@ -19,19 +19,23 @@ pub enum RenderMessage {
 }
 
 pub struct UIUpdate {
-    pub stats_endpoints: HashMap<String, i64>,
-    pub stats_addresses: HashMap<IpAddr, i64>,
+    pub stats_endpoints: HashMap<String, u64>,
+    pub stats_addresses: HashMap<IpAddr, u64>,
+    pub stats_http_codes: HashMap<u16, HashMap<String, u64>>,
     pub avg_rate: u64,
     pub treshold_reached: bool,
     pub log_samples: Vec<String>,
-    pub avg_within_alert_interval: i64,
+    pub avg_within_alert_interval: u64,
 }
 
+type DynTables<'a> = Vec<Table<'a, IntoIter<String>, IntoIter<Row<IntoIter<String>>>>>;
+type Rows = Vec<Row<IntoIter<String>>>;
 impl Default for UIUpdate {
     fn default() -> Self {
         UIUpdate {
             stats_endpoints: HashMap::new(),
             stats_addresses: HashMap::new(),
+            stats_http_codes: HashMap::new(),
             avg_rate: 0,
             treshold_reached: false,
             log_samples: vec![
@@ -47,7 +51,7 @@ impl Default for UIUpdate {
 struct AlertState {
     change_time: String,
     treshold_reached: bool,
-    avg_within_alert_interval: i64,
+    avg_within_alert_interval: u64,
 }
 
 impl AlertState {
@@ -124,6 +128,7 @@ where
             let mut stats_text = vec![];
             let mut stats_endpoints = vec![];
             let mut stats_addresses = vec![];
+            let mut stats_http_codes: Vec<(u16, Rows)> = vec![];
             let mut log_samples = vec![];
             let mut alert_text = vec![Spans::from(vec![Span::styled(
                 "Alert didn't happen to fire since start",
@@ -134,7 +139,7 @@ where
                 // Modify UI content depending on the content of received message
                 match message {
                     RenderMessage::UI(ui_update) => {
-                        /* Alerting */
+                        // Alerting values and styling
                         if ui_update.treshold_reached != alert_state.treshold_reached {
                             alert_state.reverse();
                         }
@@ -147,8 +152,8 @@ where
                                 Style::default().fg(Color::Green)
                             }
                         };
-                        /* End Alerting */
 
+                        // General statistics and settings
                         stats_text = vec![
                             Spans::from(vec![
                                 Span::styled(
@@ -184,20 +189,41 @@ where
                         for (k, v) in sorted_endpoints.iter() {
                             stats_endpoints.push(Row::StyledData(
                                 vec![format!("/{}/*", k), v.to_string()].into_iter(),
-                                Style::default().fg(Color::White),
+                                value_style,
                             ));
                         }
                         for (k, v) in sorted_addresses.iter() {
                             stats_addresses.push(Row::StyledData(
                                 vec![k.to_string(), v.to_string()].into_iter(),
-                                Style::default().fg(Color::White),
+                                value_style,
                             ));
                         }
-
-                        //Build List widget with log samples
+                        // Build List widget with log samples
                         for log in ui_update.log_samples.into_iter() {
                             log_samples.push(Spans::from(Span::raw(log)));
                         }
+
+                        // Build dynamic blocks of HTTP-codes statistics
+                        let mut http_codes_to_stats: HashMap<u16, Rows> = HashMap::new();
+
+                        for (http_code, stats) in ui_update.stats_http_codes.iter() {
+                            let mut sorted_endpoints = stats.iter().collect::<Vec<_>>();
+                            sorted_endpoints.sort_by(|a, b| b.1.cmp(a.1));
+                            http_codes_to_stats.insert(
+                                *http_code,
+                                sorted_endpoints
+                                    .iter()
+                                    .map(|(k, v)| {
+                                        Row::StyledData(
+                                            vec![format!("/{}", k), v.to_string()].into_iter(),
+                                            value_style,
+                                        )
+                                    })
+                                    .collect(),
+                            );
+                        }
+                        stats_http_codes = http_codes_to_stats.into_iter().collect::<Vec<_>>();
+                        stats_http_codes.sort_by(|a, b| a.0.cmp(&b.0))
                     }
                     RenderMessage::Exit => exit_signal = true,
                 }
@@ -237,6 +263,23 @@ where
             .widths(&[Constraint::Percentage(80), Constraint::Percentage(20)])
             .column_spacing(1);
 
+            // Dynamically create tables with HTTP-codes statistics
+            let stats_http_codes: DynTables = stats_http_codes
+                .into_iter()
+                .map(|(code, stats)| {
+                    Table::new(
+                        vec![String::from("Endpoint"), String::from("Hits")].into_iter(),
+                        (stats).into_iter(),
+                    )
+                    .block(Block::default().borders(Borders::ALL).title(Span::styled(
+                        code.to_string(),
+                        Style::default().add_modifier(Modifier::BOLD),
+                    )))
+                    .widths(&[Constraint::Percentage(80), Constraint::Percentage(20)])
+                    .column_spacing(1)
+                })
+                .collect();
+
             let log_samples = Paragraph::new(log_samples)
                 .block(create_block("Log samples"))
                 .alignment(Alignment::Left)
@@ -269,12 +312,33 @@ where
                 .constraints([Constraint::Percentage(70), Constraint::Percentage(30)].as_ref())
                 .split(bottom_chunks[1]);
 
+            // Dynamically create screen chunks for HTTP-codes statistics
+            let right_middle_chunks = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints(
+                    vec![
+                        Constraint::Percentage(
+                            // Avoid division by zero at the first render
+                            100 / if !stats_http_codes.is_empty() {
+                                stats_http_codes.len()
+                            } else {
+                                1
+                            } as u16
+                        );
+                        stats_http_codes.len()
+                    ]
+                    .as_ref(),
+                )
+                .split(right_bottom_chunks[0]);
             // Render everything!
             f.render_widget(alert, top_chunks[0]);
             f.render_widget(stats_general, top_chunks[1]);
             f.render_widget(stats_endpoints, left_bottom_chunks[0]);
             f.render_widget(stats_addresses, left_bottom_chunks[1]);
             f.render_widget(log_samples, right_bottom_chunks[1]);
+            for (index, table) in stats_http_codes.into_iter().enumerate() {
+                f.render_widget(table, right_middle_chunks[index]);
+            }
         })?;
         if exit_signal {
             return Ok(());

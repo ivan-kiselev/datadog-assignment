@@ -26,6 +26,15 @@ struct Opts {
     /// Path to the file to watch
     #[clap(long)]
     follow_only: bool,
+    /// HTTP response codes to reflect statistics on
+    #[clap(
+        short,
+        long,
+        min_values = 1,
+        require_delimiter = true,
+        default_value = "200,401,404,500,501,502,504"
+    )]
+    http_codes: Vec<u16>,
 }
 
 fn main() -> Result<(), io::Error> {
@@ -42,6 +51,7 @@ fn main() -> Result<(), io::Error> {
     let refresh_interval = opts.refresh_interval;
     let filename = opts.filename.clone();
     let follow = opts.follow_only;
+
     thread::spawn(move || {
         read_logs(
             follow,
@@ -57,6 +67,7 @@ fn main() -> Result<(), io::Error> {
     let alerting_interval = opts.alert_interval;
     let alerting_treshold = opts.alert_treshold;
     let stats_sender = tx_stats.clone();
+    let http_codes = opts.http_codes;
     thread::spawn(move || {
         collect_stats(
             rx_logs,
@@ -64,6 +75,7 @@ fn main() -> Result<(), io::Error> {
             alerting_interval,
             alerting_treshold,
             stats_sender,
+            http_codes,
         )
     });
     let keys_sender = tx_stats.clone();
