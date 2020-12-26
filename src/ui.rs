@@ -256,7 +256,7 @@ where
             .column_spacing(1);
 
             let stats_addresses = Table::new(
-                vec!["Address", "Requests"].into_iter(),
+                vec!["Address", "Hits"].into_iter(),
                 stats_addresses.into_iter(),
             )
             .block(create_block("Sorted list of addresses stats"))
