@@ -7,6 +7,7 @@ use chrono::{Duration, Utc};
 use logwatcher::{LogWatcher, LogWatcherAction};
 pub use parser_combinators::*;
 use rbl_circular_buffer::*;
+use std::process::exit;
 use std::{
     collections::HashMap,
     io,
@@ -34,32 +35,47 @@ pub fn read_logs(
     filename: &str,
 ) {
     // Panicing in both cases if can't open the file
-    let mut log_watcher = LogWatcher::register(filename.to_string()).unwrap();
-
     if !follow {
         // Initial file read on the start
-        let file = std::fs::File::open(filename).unwrap();
-        let lines = std::io::BufReader::new(&file).lines();
-        for line in lines {
-            if let Ok(unparsed_log) = line {
-                if let Ok(log) = parsers::parse_log_entry(&unparsed_log[..]) {
-                    // Generate set of Unix timestamps according to refresh window and check
-                    // if the log entry is within this timestamp
-                    if acceptible_timestamps(refresh_interval).contains(&log.timestamp.timestamp())
-                    {
-                        tx_logs.send(log).unwrap();
+        match std::fs::File::open(filename) {
+            Ok(file) => {
+                let lines = std::io::BufReader::new(&file).lines();
+                for line in lines {
+                    if let Ok(unparsed_log) = line {
+                        if let Ok(log) = parsers::parse_log_entry(&unparsed_log[..]) {
+                            // Generate set of Unix timestamps according to refresh window and check
+                            // if the log entry is within this timestamp
+                            if acceptible_timestamps(refresh_interval)
+                                .contains(&log.timestamp.timestamp())
+                            {
+                                tx_logs.send(log).unwrap();
+                            }
+                        }
                     }
                 }
             }
+            Err(err) => {
+                eprintln!("Could not read the file: {}", err);
+                exit(1);
+            }
         }
     }
+
     // Continious file read after the file was read initially, in case it being written to continiously
-    log_watcher.watch(&mut move |line: String| {
-        if let Ok(log) = parsers::parse_log_entry(&line[..]) {
-            tx_logs.send(log).unwrap();
+    match LogWatcher::register(filename.to_string()).as_mut() {
+        Ok(log_watcher) => {
+            log_watcher.watch(&mut move |line: String| {
+                if let Ok(log) = parsers::parse_log_entry(&line[..]) {
+                    tx_logs.send(log).unwrap();
+                }
+                LogWatcherAction::None
+            });
         }
-        LogWatcherAction::None
-    });
+        Err(err) => {
+            println!("Could not read the file: {}", err);
+            exit(1);
+        }
+    }
 }
 
 // Receive logs and aggregate them to data

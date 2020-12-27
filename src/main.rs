@@ -82,10 +82,10 @@ fn main() -> Result<(), io::Error> {
     thread::spawn(move || keyboard_listener(keys_sender));
     let mut screen = init_ui().unwrap();
 
-    // Provoke instant rendering of the UI instead of waiting for first cycle of refresh interval
-    tx_stats
-        .send(RenderMessage::UI(UIUpdate::default()))
-        .unwrap();
+    // Provoke instant rendering of the UI with default values instead of waiting for first cycle of refresh interval
+    // tx_stats
+    //     .send(RenderMessage::UI(UIUpdate::default()))
+    //     .unwrap();
     draw(
         &mut screen,
         rx_stats,
