@@ -186,22 +186,30 @@ where
                         sorted_addresses.sort_by(|a, b| b.1.cmp(&a.1));
 
                         // Build table widgets with statistics over endpoints and IP addresses
-                        for (k, v) in sorted_endpoints.iter() {
-                            stats_endpoints.push(Row::StyledData(
-                                vec![format!("/{}/*", k), v.to_string()].into_iter(),
-                                value_style,
-                            ));
-                        }
-                        for (k, v) in sorted_addresses.iter() {
-                            stats_addresses.push(Row::StyledData(
-                                vec![k.to_string(), v.to_string()].into_iter(),
-                                value_style,
-                            ));
-                        }
+                        stats_endpoints = sorted_endpoints
+                            .iter()
+                            .map(|(k, v)| {
+                                Row::StyledData(
+                                    vec![format!("/{}/*", k), v.to_string()].into_iter(),
+                                    value_style,
+                                )
+                            })
+                            .collect();
+                        stats_addresses = sorted_addresses
+                            .iter()
+                            .map(|(k, v)| {
+                                Row::StyledData(
+                                    vec![k.to_string(), v.to_string()].into_iter(),
+                                    value_style,
+                                )
+                            })
+                            .collect();
                         // Build List widget with log samples
-                        for log in ui_update.log_samples.into_iter() {
-                            log_samples.push(Spans::from(Span::raw(log)));
-                        }
+                        log_samples = ui_update
+                            .log_samples
+                            .into_iter()
+                            .map(|log| Spans::from(Span::raw(log)))
+                            .collect();
 
                         // Build dynamic blocks of HTTP-codes statistics
                         let mut http_codes_to_stats: HashMap<u16, Rows> = HashMap::new();
@@ -341,7 +349,7 @@ where
             }
         })?;
         if exit_signal {
-            return Ok(());
+            break Ok(());
         }
     }
 }
