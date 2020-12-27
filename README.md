@@ -20,6 +20,13 @@ To build on Mac one would need to [install Rust](https://www.rust-lang.org/tools
 cargo build --release
 ```
 
+Or with Docker:
+
+```
+docker build -t clf-parser:0.1 .
+docker run clf-parser:0.1
+```
+
 The resulting binary will appear as `target/release/clf-parser`
 
 ## UI
@@ -144,7 +151,7 @@ Built with [tui-rs](https://github.com/fdehau/tui-rs) library for dynamic visual
 
 For generating dummy logs I used [flog](https://github.com/mingrammer/flog) utility.
 
-On my system `flog` was able to write ~250k/s CLF entries at the top to the same file being run as `./flog -l >> /tmp/access.log`, and `clf-parser` was perfectly capable of handling this load, I didn't test any further considering that parsing, analyzing and reflecting stats on `~250k/s` entries is more than enough as the first iteration of this software, but I'd suggest it's not a limit.
+On my system `flog` was able to write ~250k/s CLF entries at the top to the same file being run as `./flog -l >> /tmp/access.log`, and `clf-parser` was perfectly capable of handling this load, I didn't test any further considering that parsing, analyzing and reflecting stats on `~250k/s` entries is more than enough as the first iteration of this software, but I'd suggest it's not the limit.
 
 Memory consumption is quite static if the log rate doesn't change, but also depends on the configuration you pass to the binary:
 
@@ -159,6 +166,12 @@ Tests only cover the parser part of the program, to run them:
 
 ```
 cargo test
+```
+
+Or with Docker:
+
+```bash
+docker run -v $(pwd):/app rust:1.48.0-alpine3.12 ash -c 'apk add --no-cache musl-dev && cd /app && cargo test'
 ```
 
 Initial problem statement required to test alert logic, but I found it much more important to dedicate my limited time to things that has bigger probability of failure, such as parser, so the only unit-tests you'd find here are those that test all the possible parsers in [src/parser_combinators.rs](src/parser_combinators.rs), and in the same time, alerting logic is just a few lines of simple arithmetics and they are not so essentially to be tested as parsing part:
