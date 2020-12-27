@@ -23,7 +23,7 @@ pub struct UIUpdate {
     pub stats_addresses: HashMap<IpAddr, u64>,
     pub stats_http_codes: HashMap<u16, HashMap<String, u64>>,
     pub avg_rate: u64,
-    pub treshold_reached: bool,
+    pub threshold_reached: bool,
     pub log_samples: Vec<String>,
     pub avg_within_alert_interval: u64,
 }
@@ -37,7 +37,7 @@ impl Default for UIUpdate {
             stats_addresses: HashMap::new(),
             stats_http_codes: HashMap::new(),
             avg_rate: 0,
-            treshold_reached: false,
+            threshold_reached: false,
             log_samples: vec![
                 String::from("Waiting for data from file-reading thread"),
                 String::from("Waiting for data from file-reading thread"),
@@ -50,18 +50,18 @@ impl Default for UIUpdate {
 
 struct AlertState {
     change_time: String,
-    treshold_reached: bool,
+    threshold_reached: bool,
     avg_within_alert_interval: u64,
 }
 
 impl AlertState {
     fn reverse(&mut self) {
-        self.treshold_reached = !self.treshold_reached;
+        self.threshold_reached = !self.threshold_reached;
         self.change_time = Utc::now().format("%H:%M:%S").to_string();
     }
 
     fn to_spans(&self) -> Vec<Spans> {
-        if self.treshold_reached {
+        if self.threshold_reached {
             vec![
                 Spans::from(Span::styled(
                     String::from("State: Firing"),
@@ -106,7 +106,7 @@ pub fn draw<B>(
     rx_stats: Receiver<RenderMessage>,
     refresh_interval: u64,
     alerting_interval: u64,
-    alerting_treshold: u64,
+    alerting_threshold: u64,
     filename: String,
 ) -> Result<(), io::Error>
 where
@@ -114,7 +114,7 @@ where
 {
     // State for the alert block, have to be in outer scope to persist
     let mut alert_state = AlertState {
-        treshold_reached: false,
+        threshold_reached: false,
         change_time: String::from(""),
         avg_within_alert_interval: 0,
     };
@@ -140,13 +140,13 @@ where
                 match message {
                     RenderMessage::UI(ui_update) => {
                         // Alerting values and styling
-                        if ui_update.treshold_reached != alert_state.treshold_reached {
+                        if ui_update.threshold_reached != alert_state.threshold_reached {
                             alert_state.reverse();
                         }
                         alert_state.avg_within_alert_interval = ui_update.avg_within_alert_interval;
                         if alert_state.change_time != *"" {
                             alert_text = alert_state.to_spans();
-                            alert_style = if alert_state.treshold_reached {
+                            alert_style = if alert_state.threshold_reached {
                                 Style::default().fg(Color::Red)
                             } else {
                                 Style::default().fg(Color::Green)
@@ -170,8 +170,11 @@ where
                                 Span::styled(format!("{}s | ", alerting_interval), value_style),
                             ]),
                             Spans::from(vec![
-                                Span::styled("Alerting treshold: ", key_style),
-                                Span::styled(format!("{}req/s | ", alerting_treshold), alert_style),
+                                Span::styled("Alerting threshold: ", key_style),
+                                Span::styled(
+                                    format!("{}req/s | ", alerting_threshold),
+                                    alert_style,
+                                ),
                                 Span::styled("Log file: ", key_style),
                                 Span::styled(format!("{} | ", filename), value_style),
                             ]),
