@@ -37,16 +37,16 @@ USAGE:
 FLAGS:
         --follow-only    Only follow the newly added content to file, do not read previously
                          generated lines of code. Good for large files that are known for holding a
-                         a lot of old logs
+                         lot of old logs
         --help           Prints help information
     -V, --version        Prints version information
 
 OPTIONS:
         --alert-interval <alert-interval>
-            Alerts after this much seconds traffic being more than the threshold on average, the threshold is
-            set by --alert-threshold [default: 20]
+            Alerts after this much seconds traffic being more than threshold on average, threshold
+            is set by --alert-threshold [default: 20]
 
-        --alert-treshold <alert-treshold>        Treshold for the alert [default: 10]
+        --alert-threshold <alert-threshold>      threshold for the alert [default: 10]
     -f, --filename <filename>
             Path to the file to watch [default: /tmp/access.log]
 
@@ -55,7 +55,6 @@ OPTIONS:
 
     -r, --refresh-interval <refresh-interval>
             Sets an interval of refreshing the statistics in seconds, max 256 [default: 10]
-
 ```
 
 Defaults are set to what is asked in the assignment text, but I find it rather convenient to use `clf-parser --refresh-interval 3 --follow-only` just to get data rendered faster
