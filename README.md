@@ -67,7 +67,7 @@ Why Rust? There are a few reasons for that:
 
 - it is my freshest language. I've been studying it for quite some months now.
 - I'm not an experienced programmer, developing code was not my day-to-day activity in the last few years, and I wanted to be protected from fatal rookie mistakes by the safety of Rust's type system, which worked out perfectly.
-- It's blazingly fast and I'd assume it is just important quality for real-time parsing software.
+- It's [blazingly fast](https://benchmarksgame-team.pages.debian.net/benchmarksgame/performance/nbody.html) and I'd assume it is just important quality for real-time parsing software.
 
 ### General notes
 
@@ -86,7 +86,7 @@ Overall it works like this:
 Input -> UI
 ```
 
-All the components are decoupled through the channles, which would make it relatively painless to chip each component off and place it separately replacing channels with network.
+All the components are decoupled through the channels, which would make it relatively painless to chip each component off and place it separately replacing channels with network.
 
 ### Parser
 
@@ -155,7 +155,7 @@ Memory consumption doesn't grow linearly but memory profiling goes far beyond th
 
 ## Testing
 
-Tests only cover parser part of the programm, to run them:
+Tests only cover the parser part of the program, to run them:
 
 ```
 cargo test
