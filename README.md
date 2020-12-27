@@ -20,14 +20,14 @@ To build on Mac one would need to [install Rust](https://www.rust-lang.org/tools
 cargo build --release
 ```
 
+The resulting binary will appear as `target/release/clf-parser`
+
 Or with Docker:
 
 ```
 docker build -t clf-parser:0.1 .
 docker run clf-parser:0.1
 ```
-
-The resulting binary will appear as `target/release/clf-parser`
 
 ## UI
 
