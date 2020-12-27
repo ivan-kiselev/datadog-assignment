@@ -78,14 +78,14 @@ fn main() -> Result<(), io::Error> {
             http_codes,
         )
     });
-    let keys_sender = tx_stats.clone();
-    thread::spawn(move || keyboard_listener(keys_sender));
+    tx_stats
+        .send(RenderMessage::UI(UIUpdate::default()))
+        .unwrap();
+    thread::spawn(move || keyboard_listener(tx_stats));
     let mut screen = init_ui().unwrap();
 
     // Provoke instant rendering of the UI with default values instead of waiting for first cycle of refresh interval
-    // tx_stats
-    //     .send(RenderMessage::UI(UIUpdate::default()))
-    //     .unwrap();
+
     draw(
         &mut screen,
         rx_stats,
