@@ -155,8 +155,26 @@ Memory consumption doesn't grow linearly but memory profiling goes far beyond th
 
 ## Testing
 
+Tests only cover parser part of the programm, to run them:
+
 ```
 cargo test
+```
+
+Initial problem statement required to test alert logic, but I found it much more important to dedicate my limited time to things that has bigger probability to fail, such as parser, so the only unit-tests you'd find here are those that test all the possible parsers in [src/parser_combinators.rs](src/parser_combinators.rs), and in the same time, alerting logic is just a few lines of simple arithmetics and they are not so essentially to be tested as parsing part:
+
+```rust
+                let avg_val_in_alert_interval = alerting_buffer
+                    .collect::<Vec<u64>>()
+                    .into_iter()
+                    .sum::<u64>()
+                    / (max_alerting_buffer_len * refresh_interval as usize) as u64;
+                if avg_val_in_alert_interval >= alert_threshold as u64 {
+                    if let RenderMessage::UI(ref mut message) = render_message {
+                        message.threshold_reached = true;
+                        message.avg_within_alert_interval = avg_val_in_alert_interval;
+                    }
+                };
 ```
 
 ## Road Map
