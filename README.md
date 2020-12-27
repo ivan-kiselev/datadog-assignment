@@ -80,9 +80,13 @@ The application runs a few threads that are synchronized through [channels](http
 
 Overall it works like this:
 
-`/tmp/access.log` <-- watch/read --> Parser --> Stats -> UI
+```
+/tmp/access.log <-- watch/read --> Parser --> Stats -> UI
 
 Input -> UI
+```
+
+All the components are decoupled through the channles, which would make it relatively painless to chip each component off and place it separately replacing channels with network.
 
 ### Parser
 
